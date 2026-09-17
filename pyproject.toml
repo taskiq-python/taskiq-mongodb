@@ -1,0 +1,148 @@
+[project]
+name = "taskiq-mongodb"
+version = "0.1.0"
+description = "Taskiq integration for MongoDB"
+readme = "README.md"
+authors = [
+    { name = "Dima Anfimov", email = "lovesolaristics@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Natural Language :: English",
+    "Framework :: AsyncIO",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development",
+    "Topic :: System :: Networking",
+    "Typing :: Typed",
+    "Operating System :: OS Independent",
+]
+keywords = ["taskiq", "broker", "mongodb"]
+requires-python = ">=3.11"
+dependencies = [
+    "pymongo>=4.18.1",
+    "taskiq>=0.12.6",
+]
+
+
+[project.urls]
+"Source" = "https://github.com/taskiq-python/taskiq-mongodb"
+"Bug Tracker" = "https://github.com/taskiq-python/taskiq-mongodb/issues"
+"Repository" = "https://github.com/taskiq-python/taskiq-mongodb/"
+"Documentation" = "https://taskiq-python.github.io/taskiq-mongodb/"
+
+[dependency-groups]
+dev = [
+    {include-group = "docs"},
+    {include-group = "test"},
+    "prek>=0.5.3",
+    "ruff>=0.16.8",
+    "ty>=0.0.81",
+    "zizmor>=1.30.1",
+]
+test = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-coverage>=0.0",
+]
+docs = [
+    "zensical>=0.0.62",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "taskiq_mongodb"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "."
+]
+asyncio_mode = "auto"
+
+[tool.coverage.report]
+exclude_lines = [
+    "# pragma: no cover",
+    "def __repr__",
+    "def __str__",
+    "def __unicode__",
+    "if tp.TYPE_CHECKING:",
+]
+show_missing = true
+skip_empty = true
+omit = [
+    "*/__init__.py",
+    "venv/*",
+    "tests/*"
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # TODO: enable this rules
+    "TRY301",
+    "ANN401",
+    "FIX002",
+    "TD002",
+    "TD003",
+
+    # boolean args
+    "FBT001",
+    "FBT002",
+
+    # Docstrings
+    "D104",  # in public package
+    "D100",  # in public module
+
+    # Conflicted rules
+    "D203",  # with D211
+    "D212",  # with D213
+    "COM812",  # with formatter
+
+    "EM101",
+    "TRY003",
+    "CPY001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "D",
+    "S101",  # assert usage
+    "SLF001",  # private member accessed
+    "PLR2004",  # magic values
+]
+"examples/*" = [
+    "T201",  # print
+    "D",
+    "INP001",
+    "B008",  # taskiq dependency injection uses `= TaskiqDepends()` as a default argument
+]
+"docs/examples/*" = [
+    "T201",  # print
+    "D",
+    "INP001",
+]
+"src/taskiq_mongodb/broker.py" = [
+    "PLR0913",  # too many arguments
+    "PLR0917",  # too many positional arguments
+]
+
+[tool.ruff.lint.isort]
+known-local-folder = ["taskiq_mongodb"]
+lines-after-imports = 2

@@ -1,0 +1,50 @@
+repos:
+  - repo: builtin
+    hooks:
+      - id: trailing-whitespace
+      - id: check-toml
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.50.2
+    hooks:
+      - id: typos
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: Run ruff lints
+        entry: uv run ruff
+        language: system
+        pass_filenames: false
+        types: [python]
+        args:
+          - "check"
+          - "--fix"
+          - "src"
+          - "tests"
+
+      - id: ty
+        name: Validate types with ty
+        entry: uv run ty
+        language: system
+        pass_filenames: false
+        types: [python]
+        args:
+          - "check"
+          - ./src/taskiq_mongodb
+          - ./tests
+
+      - id: zizmor
+        name: zizmor
+        language: python
+        entry: uv run --active --frozen zizmor .
+        files: ^\.github
+        require_serial: true
+        verbose: true
+        pass_filenames: false
