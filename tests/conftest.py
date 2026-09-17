@@ -9,6 +9,7 @@ from taskiq_mongodb import MongoBroker, MongoResultBackend
 
 
 MONGO_URI = os.environ.get("TASKIQ_MONGODB_TEST_URI", "mongodb://root:password@localhost:27017")
+TEST_VISIBILITY_TIMEOUT = 1
 
 
 @pytest_asyncio.fixture
@@ -30,7 +31,16 @@ async def result_backend(db_name: str) -> AsyncIterator[MongoResultBackend]:
 
 @pytest_asyncio.fixture
 async def broker(db_name: str) -> AsyncIterator[MongoBroker]:
-    instance = MongoBroker(MONGO_URI, db_name, poll_interval=0.05, visibility_timeout=1)
+    instance = MongoBroker(
+        MONGO_URI,
+        db_name,
+        queues={
+            "name": "taskiq",
+            "poll_interval": 0.05,
+            "visibility_timeout": TEST_VISIBILITY_TIMEOUT,
+            "max_retries": 5,
+        },
+    )
     await instance.startup()
     yield instance
     await instance.shutdown()

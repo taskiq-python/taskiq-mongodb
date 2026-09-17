@@ -1,7 +1,7 @@
 [project]
 name = "taskiq-mongodb"
 version = "0.1.0"
-description = "Add your description here"
+description = "Taskiq integration for MongoDB"
 readme = "README.md"
 authors = [
     { name = "Dima Anfimov", email = "lovesolaristics@gmail.com" }
@@ -131,6 +131,7 @@ ignore = [
     "T201",  # print
     "D",
     "INP001",
+    "B008",  # taskiq dependency injection uses `= TaskiqDepends()` as a default argument
 ]
 "docs/examples/*" = [
     "T201",  # print

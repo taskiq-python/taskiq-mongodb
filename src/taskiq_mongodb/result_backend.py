@@ -19,7 +19,7 @@ class MongoResultBackend(AsyncResultBackend[_ReturnType]):
     def __init__(
         self,
         uri: str,
-        db_name: str,
+        database_name: str,
         collection_name: str = "task_results",
         keep_results: bool = True,
         ttl_seconds: int = 3600,
@@ -28,22 +28,22 @@ class MongoResultBackend(AsyncResultBackend[_ReturnType]):
         Configure the MongoDB client, database, and collection used to store results.
 
         :param uri: MongoDB connection URI.
-        :param db_name: Database name.
+        :param database_name: Database name.
         :param collection_name: Collection used for task documents.
         :param keep_results: If False, delete the document after a successful get_result.
         :param ttl_seconds: Seconds until result documents expire; 0 omits expire_at (no TTL expiry).
         """
         self.client = AsyncMongoClient(uri)
-        self.db = self.client[db_name]
-        self.col = self.db[collection_name]
+        self.database = self.client[database_name]
+        self.collection = self.database[collection_name]
         self.keep_results = keep_results
         self.ttl_seconds = ttl_seconds
 
     async def startup(self) -> None:
         """Create a unique index on task_id; if ttl_seconds > 0, also create a TTL index on expire_at."""
-        await self.col.create_index("task_id", unique=True)
+        await self.collection.create_index("task_id", unique=True)
         if self.ttl_seconds > 0:
-            await self.col.create_index("expire_at", expireAfterSeconds=0)
+            await self.collection.create_index("expire_at", expireAfterSeconds=0)
 
     async def shutdown(self) -> None:
         """Close the MongoDB client."""
@@ -66,30 +66,30 @@ class MongoResultBackend(AsyncResultBackend[_ReturnType]):
         update: dict[str, Any] = {"$set": fields}
         if self.ttl_seconds == 0:
             update["$unset"] = {"expire_at": None}
-        await self.col.update_one({"task_id": task_id}, update, upsert=True)
+        await self.collection.update_one({"task_id": task_id}, update, upsert=True)
 
     async def is_result_ready(self, task_id: str) -> bool:
         """
-        Return True if a document exists and includes the serialized result field ``value``.
+        Return True if a document exists and includes the serialized result value.
 
         Progress-only documents do not count.
 
         :param task_id: Same id as used with set_result / kiq.
         :return: True when get_result can be called safely.
         """
-        doc = await self.col.find_one({"task_id": task_id})
+        doc = await self.collection.find_one({"task_id": task_id})
         return doc is not None and "value" in doc
 
     async def get_result(self, task_id: str, with_logs: bool = False) -> TaskiqResult[_ReturnType]:
         """
-        Load and validate a TaskiqResult; raises if the document or ``value`` is missing.
+        Load and validate a TaskiqResult; raises if the document or its result value is missing.
 
         :param task_id: Task id to load; must match the id used when saving.
         :param with_logs: If True, keep logs on the result; if False, set log to None (smaller payload / privacy).
         :return: Deserialized TaskiqResult.
-        :raises ResultIsMissingError: No document or ``value`` not written yet (e.g. only progress exists).
+        :raises ResultIsMissingError: No document or result value written yet (e.g. only progress exists).
         """
-        doc = await self.col.find_one({"task_id": task_id})
+        doc = await self.collection.find_one({"task_id": task_id})
 
         if not doc or "value" not in doc:
             raise ResultIsMissingError
@@ -103,13 +103,13 @@ class MongoResultBackend(AsyncResultBackend[_ReturnType]):
             result.log = None
 
         if not self.keep_results:
-            await self.col.delete_one({"task_id": task_id})
+            await self.collection.delete_one({"task_id": task_id})
 
         return result
 
     async def set_progress(self, task_id: str, progress: TaskProgress[_ReturnType]) -> None:
-        """Update task progress (may coexist with progress-only docs until set_result writes ``value``)."""
-        await self.col.update_one(
+        """Update task progress (may coexist with a progress-only document until set_result writes the result)."""
+        await self.collection.update_one(
             {"task_id": task_id},
             {
                 "$set": {
@@ -120,8 +120,8 @@ class MongoResultBackend(AsyncResultBackend[_ReturnType]):
         )
 
     async def get_progress(self, task_id: str) -> TaskProgress[_ReturnType] | None:
-        """Return current progress, or None if there is no document or no ``progress`` field."""
-        doc = await self.col.find_one({"task_id": task_id})
+        """Return current progress, or None if there is no document or no progress has been recorded."""
+        doc = await self.collection.find_one({"task_id": task_id})
 
         if not doc or "progress" not in doc:
             return None

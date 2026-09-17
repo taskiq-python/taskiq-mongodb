@@ -1,60 +1,58 @@
 """
-Example showing how MongoBroker requeues and eventually dead-letters
-messages that are claimed but never acknowledged (e.g. a worker crashed
-mid-task).
+Example of automatic retries with MongoBroker and TaskIQ's SimpleRetryMiddleware.
+
+A task that raises an exception is re-kicked by the middleware, up to the configured retry limit. A task that
+keeps failing exhausts its retry budget and taskiq gives up on it (the application-level analogue of a message
+landing in a dead-letter queue).
 
 Requires a MongoDB instance, e.g. `make run_infra` from the repo root.
-This script drives the broker directly, without a `taskiq worker` process,
-so it can control acknowledgement itself.
 
 How to run:
-    uv run examples/dead_letter.py
+    1. Run worker: taskiq worker examples.dead_letter:broker -w 1
+    2. Run client: uv run examples/dead_letter.py
 """
 
 import asyncio
-import contextlib
 import os
 
-from taskiq import BrokerMessage
+from taskiq import Context, TaskiqDepends
+from taskiq.middlewares import SimpleRetryMiddleware
 
-from taskiq_mongodb import MongoBroker
+from taskiq_mongodb import MongoBroker, MongoResultBackend
 
 
 MONGO_URI = os.environ.get("TASKIQ_MONGODB_URI", "mongodb://root:password@localhost:27017")
 
+broker = (
+    MongoBroker(MONGO_URI, "taskiq_example")
+    .with_result_backend(MongoResultBackend(MONGO_URI, "taskiq_example"))
+    .with_middlewares(SimpleRetryMiddleware(default_retry_count=3))
+)
+
+
+@broker.task(retry_on_error=True, max_retries=3)
+async def flaky_task(fail_times: int, context: Context = TaskiqDepends()) -> str:
+    attempt = int(context.message.labels.get("_retries", 0)) + 1
+    if attempt <= fail_times:
+        message = f"attempt {attempt} failed on purpose ({fail_times} failures configured)"
+        raise RuntimeError(message)
+    return f"succeeded on attempt {attempt}"
+
 
 async def main() -> None:
-    # Small visibility_timeout/poll_interval and max_retries=2 so the example
-    # finishes quickly; production values would be minutes, not seconds.
-    broker = MongoBroker(
-        MONGO_URI,
-        "taskiq_example",
-        poll_interval=0.2,
-        visibility_timeout=1,
-        max_retries=2,
-    )
     await broker.startup()
 
-    await broker.kick(
-        BrokerMessage(task_id="demo", task_name="demo:task", message=b"payload", labels={}),
-    )
+    # Fails twice, then succeeds within the max_retries=3 budget.
+    recovers = await flaky_task.kiq(fail_times=2)
+    result = await recovers.wait_result(timeout=10)
+    print(f"recovers after retries: is_err={result.is_err} value={result.return_value!r}")
 
-    listener = broker.listen()
-    for attempt in range(1, broker.max_retries + 1):
-        await anext(listener)
-        print(f"attempt {attempt}: claimed message, deliberately not acknowledging it")
-        # Simulate a crashed worker: never call `await message.ack()`.
-        await asyncio.sleep(broker.visibility_timeout + 0.5)  # let the claim go stale
+    # Fails more times than max_retries allows: retries are exhausted and taskiq gives up on the task, same idea
+    # as dead-lettering a message.
+    gives_up = await flaky_task.kiq(fail_times=10)
+    result = await gives_up.wait_result(timeout=10)
+    print(f"exhausts retries: is_err={result.is_err}")
 
-    # One more poll cycle is what actually notices attempts >= max_retries
-    # and flips the message to "dead"; nothing is left to claim afterwards.
-    with contextlib.suppress(TimeoutError):
-        await asyncio.wait_for(anext(listener), timeout=1)
-
-    doc = await broker.col.find_one({})
-    print(f"final status after {broker.max_retries} unacknowledged attempts: {doc['status']}")
-
-    await listener.aclose()
     await broker.shutdown()
 
 

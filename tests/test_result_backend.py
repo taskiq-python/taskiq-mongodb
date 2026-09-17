@@ -75,7 +75,7 @@ async def test_ttl_seconds_zero_omits_expire_at(db_name: str) -> None:
     try:
         await backend.set_result("task-1", make_result())
 
-        doc = await backend.col.find_one({"task_id": "task-1"})
+        doc = await backend.collection.find_one({"task_id": "task-1"})
 
         assert doc is not None
         assert "expire_at" not in doc
@@ -86,7 +86,7 @@ async def test_ttl_seconds_zero_omits_expire_at(db_name: str) -> None:
 async def test_ttl_seconds_positive_sets_expire_at(result_backend: MongoResultBackend) -> None:
     await result_backend.set_result("task-1", make_result())
 
-    doc = await result_backend.col.find_one({"task_id": "task-1"})
+    doc = await result_backend.collection.find_one({"task_id": "task-1"})
 
     assert doc is not None
     assert "expire_at" in doc
@@ -107,7 +107,7 @@ async def test_get_progress_returns_none_when_missing(result_backend: MongoResul
 
 
 async def test_startup_creates_expected_indexes(result_backend: MongoResultBackend) -> None:
-    indexes = await result_backend.col.index_information()
+    indexes = await result_backend.collection.index_information()
 
     assert "task_id_1" in indexes
     assert "expire_at_1" in indexes
